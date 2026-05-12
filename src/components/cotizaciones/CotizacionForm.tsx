@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { TipoInsumo, Moneda } from '../../types';
 import { Button } from '../ui/Button';
 import { formatMonto } from '../../utils/formatters';
+import { ArrowLeftRight } from 'lucide-react';
 
 const schema = z.object({
   tipo: z.enum(['insumo', 'material', 'servicio', 'maquinaria']),
@@ -51,6 +52,9 @@ const TIPOS: { label: string; value: TipoInsumo }[] = [
   { label: 'Maquinaria', value: 'maquinaria' },
 ];
 
+// Tipo de cambio por defecto (configurable por el usuario en el formulario)
+const TC_DEFAULT_USD_UYU = 42;
+
 function Field({
   label, error, children, required,
 }: { label: string; error?: string; children: React.ReactNode; required?: boolean }) {
@@ -68,6 +72,9 @@ function Field({
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]/30 focus:border-[#1D9E75] bg-white';
 
 export function CotizacionForm({ defaultValues, onSubmit, onCancel, loading }: Props) {
+  const [tcUSDUYU, setTcUSDUYU] = useState(TC_DEFAULT_USD_UYU);
+  const [showTC, setShowTC] = useState(false);
+
   const {
     register, handleSubmit, watch, formState: { errors },
   } = useForm<CotizacionFormData>({
@@ -87,6 +94,16 @@ export function CotizacionForm({ defaultValues, onSubmit, onCancel, loading }: P
   const precio = watch('precioUnitario') || 0;
   const moneda = watch('moneda') as Moneda;
   const total = cantidad * precio;
+
+  // Conversión entre USD y UYU
+  function convertir(monto: number, desde: Moneda): { monto: number; moneda: Moneda } | null {
+    if (desde === 'USD') return { monto: monto * tcUSDUYU, moneda: 'UYU' };
+    if (desde === 'UYU') return { monto: monto / tcUSDUYU, moneda: 'USD' };
+    return null;
+  }
+
+  const precioConvertido = precio > 0 ? convertir(precio, moneda) : null;
+  const totalConvertido = total > 0 ? convertir(total, moneda) : null;
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -131,21 +148,73 @@ export function CotizacionForm({ defaultValues, onSubmit, onCancel, loading }: P
         <div />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="Precio unitario" error={errors.precioUnitario?.message} required>
-          <input type="number" step="any" {...register('precioUnitario', { valueAsNumber: true })} className={inputCls} />
-        </Field>
-        <Field label="Moneda" error={errors.moneda?.message} required>
-          <select {...register('moneda')} className={inputCls}>
-            <option>USD</option><option>UYU</option><option>ARS</option>
-          </select>
-        </Field>
-        {total > 0 && (
+      {/* Precio + Moneda + Conversión */}
+      <div className="space-y-2">
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Precio unitario" error={errors.precioUnitario?.message} required>
+            <input type="number" step="any" {...register('precioUnitario', { valueAsNumber: true })} className={inputCls} />
+          </Field>
+          <Field label="Moneda" error={errors.moneda?.message} required>
+            <select {...register('moneda')} className={inputCls}>
+              <option value="USD">USD — Dólar</option>
+              <option value="UYU">UYU — Peso uruguayo</option>
+              <option value="ARS">ARS — Peso argentino</option>
+            </select>
+          </Field>
+          {/* Tipo de cambio toggle */}
           <div className="flex items-end">
-            <div className="w-full bg-[#E1F5EE] rounded-lg px-3 py-2 text-sm">
-              <span className="text-gray-500 text-xs">Total: </span>
-              <span className="font-bold text-[#0F6E56]">{formatMonto(total, moneda)}</span>
+            <button
+              type="button"
+              onClick={() => setShowTC(v => !v)}
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs border border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-[#1D9E75] hover:text-[#1D9E75] transition-colors"
+            >
+              <ArrowLeftRight size={13} />
+              TC: {tcUSDUYU} $/U$S
+            </button>
+          </div>
+        </div>
+
+        {/* Tipo de cambio editable */}
+        {showTC && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center gap-3">
+            <span className="text-xs text-blue-700 font-medium">Tipo de cambio USD → UYU:</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-blue-600">1 USD =</span>
+              <input
+                type="number"
+                step="0.01"
+                value={tcUSDUYU}
+                onChange={e => setTcUSDUYU(Number(e.target.value))}
+                className="w-20 border border-blue-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+              />
+              <span className="text-xs text-blue-600">UYU</span>
             </div>
+          </div>
+        )}
+
+        {/* Conversión en tiempo real */}
+        {precio > 0 && (moneda === 'USD' || moneda === 'UYU') && precioConvertido && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[#E1F5EE] rounded-lg px-3 py-2">
+              <p className="text-[10px] text-gray-500 mb-0.5">Precio unitario</p>
+              <p className="text-sm font-bold text-[#0F6E56]">{formatMonto(precio, moneda)}</p>
+              <p className="text-xs text-gray-400">≈ {formatMonto(precioConvertido.monto, precioConvertido.moneda)}</p>
+            </div>
+            {total > 0 && totalConvertido && (
+              <div className="bg-[#E1F5EE] rounded-lg px-3 py-2">
+                <p className="text-[10px] text-gray-500 mb-0.5">Total estimado</p>
+                <p className="text-sm font-bold text-[#0F6E56]">{formatMonto(total, moneda)}</p>
+                <p className="text-xs text-gray-400">≈ {formatMonto(totalConvertido.monto, totalConvertido.moneda)}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Solo total sin conversión (ARS u otro) */}
+        {total > 0 && moneda === 'ARS' && (
+          <div className="bg-[#E1F5EE] rounded-lg px-3 py-2 text-sm">
+            <span className="text-gray-500 text-xs">Total: </span>
+            <span className="font-bold text-[#0F6E56]">{formatMonto(total, moneda)}</span>
           </div>
         )}
       </div>

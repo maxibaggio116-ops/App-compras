@@ -43,10 +43,11 @@ function Field({ label, error, children, required }: { label: string; error?: st
 export function FacturaForm({ cotizacion: c, usuario, onSubmit, onCancel, loading }: Props) {
   const [adjuntoNombre, setAdjuntoNombre] = useState('');
   const [adjuntoBase64, setAdjuntoBase64] = useState('');
+  const [tcUSDUYU, setTcUSDUYU] = useState(42);
 
   const totalEstimado = c.cantidad * c.precioUnitario;
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FacturaFormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FacturaFormData>({
     resolver: zodResolver(schema) as Resolver<FacturaFormData>,
     defaultValues: {
       montoTotal: totalEstimado,
@@ -55,6 +56,17 @@ export function FacturaForm({ cotizacion: c, usuario, onSubmit, onCancel, loadin
       observaciones: '',
     },
   });
+
+  const montoIngresado = watch('montoTotal') || 0;
+  const monedaIngresada = watch('moneda') as 'USD' | 'UYU' | 'ARS';
+
+  function convertir(monto: number, desde: string) {
+    if (desde === 'USD') return { monto: monto * tcUSDUYU, moneda: 'UYU' };
+    if (desde === 'UYU') return { monto: monto / tcUSDUYU, moneda: 'USD' };
+    return null;
+  }
+
+  const montoConvertido = montoIngresado > 0 ? convertir(montoIngresado, monedaIngresada) : null;
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -75,9 +87,36 @@ export function FacturaForm({ cotizacion: c, usuario, onSubmit, onCancel, loadin
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-      <div className="bg-[#E1F5EE] rounded-lg p-3 text-sm">
-        <span className="text-gray-600">Total estimado: </span>
-        <span className="font-bold text-[#0F6E56]">{formatMonto(totalEstimado, c.moneda)}</span>
+      {/* Resumen cotización */}
+      <div className="bg-[#E1F5EE] rounded-lg p-3 space-y-1">
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-600">Total estimado (cotización):</span>
+          <span className="font-bold text-[#0F6E56]">{formatMonto(totalEstimado, c.moneda)}</span>
+        </div>
+        {(c.moneda === 'USD' || c.moneda === 'UYU') && (
+          <div className="flex justify-between text-xs text-gray-400">
+            <span>Equivalente aprox. (TC {tcUSDUYU} $/U$S):</span>
+            <span>
+              {c.moneda === 'USD'
+                ? formatMonto(totalEstimado * tcUSDUYU, 'UYU')
+                : formatMonto(totalEstimado / tcUSDUYU, 'USD')}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Tipo de cambio */}
+      <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5">
+        <span className="text-xs text-blue-700 font-medium whitespace-nowrap">Tipo de cambio:</span>
+        <span className="text-xs text-blue-600">1 USD =</span>
+        <input
+          type="number"
+          step="0.01"
+          value={tcUSDUYU}
+          onChange={e => setTcUSDUYU(Number(e.target.value))}
+          className="w-20 border border-blue-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+        />
+        <span className="text-xs text-blue-600">UYU</span>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -92,10 +131,17 @@ export function FacturaForm({ cotizacion: c, usuario, onSubmit, onCancel, loadin
       <div className="grid grid-cols-2 gap-4">
         <Field label="Monto total" error={errors.montoTotal?.message} required>
           <input type="number" step="any" {...register('montoTotal', { valueAsNumber: true })} className={inputCls} />
+          {montoConvertido && montoIngresado > 0 && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              ≈ {formatMonto(montoConvertido.monto, montoConvertido.moneda as 'USD' | 'UYU')}
+            </p>
+          )}
         </Field>
         <Field label="Moneda" error={errors.moneda?.message} required>
           <select {...register('moneda')} className={inputCls}>
-            <option>USD</option><option>UYU</option><option>ARS</option>
+            <option value="USD">USD — Dólar</option>
+            <option value="UYU">UYU — Peso uruguayo</option>
+            <option value="ARS">ARS — Peso argentino</option>
           </select>
         </Field>
       </div>
