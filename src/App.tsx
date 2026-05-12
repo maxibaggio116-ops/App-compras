@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { Layout } from './components/layout/Layout';
-import { RolProvider } from './context/RolContext';
+import { RolProvider, useRol } from './context/RolContext';
 import { useCotizacionesStore } from './store/cotizacionesStore';
 import { useCuentasStore } from './store/cuentasStore';
 import { useStockStore } from './store/stockStore';
@@ -11,6 +11,7 @@ import CotizacionesPage from './pages/CotizacionesPage';
 import AprobadasPage from './pages/AprobadasPage';
 import CuentasCorrientesPage from './pages/CuentasCorrientesPage';
 import StockPage from './pages/StockPage';
+import LoginPage from './pages/LoginPage';
 import toast from 'react-hot-toast';
 
 function StoreInit() {
@@ -50,21 +51,34 @@ function UndoKeyHandler() {
   return null;
 }
 
+function AppRoutes() {
+  const { usuarioActual } = useRol();
+
+  if (!usuarioActual) return <LoginPage />;
+
+  return (
+    <>
+      <StoreInit />
+      <UndoKeyHandler />
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Navigate to="/cotizaciones" replace />} />
+          <Route path="cotizaciones" element={<CotizacionesPage />} />
+          <Route path="aprobadas" element={<AprobadasPage />} />
+          <Route path="cuentas" element={<CuentasCorrientesPage />} />
+          <Route path="stock" element={<StockPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/cotizaciones" replace />} />
+      </Routes>
+    </>
+  );
+}
+
 export default function App() {
   return (
     <RolProvider>
       <BrowserRouter>
-        <StoreInit />
-        <UndoKeyHandler />
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/cotizaciones" replace />} />
-            <Route path="cotizaciones" element={<CotizacionesPage />} />
-            <Route path="aprobadas" element={<AprobadasPage />} />
-            <Route path="cuentas" element={<CuentasCorrientesPage />} />
-            <Route path="stock" element={<StockPage />} />
-          </Route>
-        </Routes>
+        <AppRoutes />
         <Toaster
           position="top-right"
           toastOptions={{

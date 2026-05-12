@@ -9,6 +9,8 @@ export interface Usuario {
   rol: Rol;
   iniciales: string;
   color: string;
+  email: string;
+  password: string;
 }
 
 export const USUARIOS: Usuario[] = [
@@ -20,6 +22,8 @@ export const USUARIOS: Usuario[] = [
     rol: 'operador',
     iniciales: 'SP',
     color: 'bg-purple-500',
+    email: 'saray@jugos.com.uy',
+    password: 'saray1234',
   },
   {
     id: 'alexander',
@@ -29,6 +33,8 @@ export const USUARIOS: Usuario[] = [
     rol: 'operador',
     iniciales: 'AB',
     color: 'bg-blue-500',
+    email: 'alexander@jugos.com.uy',
+    password: 'alexander1234',
   },
   {
     id: 'patricio',
@@ -38,6 +44,8 @@ export const USUARIOS: Usuario[] = [
     rol: 'operador',
     iniciales: 'PL',
     color: 'bg-orange-500',
+    email: 'patricio@jugos.com.uy',
+    password: 'patricio1234',
   },
   {
     id: 'ignacio',
@@ -47,6 +55,8 @@ export const USUARIOS: Usuario[] = [
     rol: 'operador',
     iniciales: 'IP',
     color: 'bg-teal-500',
+    email: 'ignacio@jugos.com.uy',
+    password: 'ignacio1234',
   },
   {
     id: 'admin',
@@ -56,44 +66,66 @@ export const USUARIOS: Usuario[] = [
     rol: 'admin',
     iniciales: 'AD',
     color: 'bg-[#1D9E75]',
+    email: 'admin@jugos.com.uy',
+    password: 'admin1234',
   },
 ];
 
-interface RolContextType {
-  usuarioActual: Usuario;
-  setUsuarioById: (id: string) => void;
+interface AuthContextType {
+  usuarioActual: Usuario | null;
+  login: (email: string, password: string) => boolean;
+  logout: () => void;
+  isAdmin: boolean;
   rol: Rol;
   usuario: string;
-  isAdmin: boolean;
 }
 
-const RolContext = createContext<RolContextType>({
-  usuarioActual: USUARIOS[0],
-  setUsuarioById: () => {},
-  rol: 'operador',
-  usuario: USUARIOS[0].nombre,
+const AuthContext = createContext<AuthContextType>({
+  usuarioActual: null,
+  login: () => false,
+  logout: () => {},
   isAdmin: false,
+  rol: 'operador',
+  usuario: '',
 });
 
-export function RolProvider({ children }: { children: React.ReactNode }) {
-  const [usuarioActual, setUsuarioActual] = useState<Usuario>(USUARIOS[0]);
+const SESSION_KEY = 'jugos-session';
 
-  function setUsuarioById(id: string) {
-    const u = USUARIOS.find(u => u.id === id);
-    if (u) setUsuarioActual(u);
+export function RolProvider({ children }: { children: React.ReactNode }) {
+  const [usuarioActual, setUsuarioActual] = useState<Usuario | null>(() => {
+    const saved = localStorage.getItem(SESSION_KEY);
+    if (!saved) return null;
+    const u = USUARIOS.find(u => u.id === saved);
+    return u ?? null;
+  });
+
+  function login(email: string, password: string): boolean {
+    const u = USUARIOS.find(
+      u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
+    );
+    if (!u) return false;
+    setUsuarioActual(u);
+    localStorage.setItem(SESSION_KEY, u.id);
+    return true;
+  }
+
+  function logout() {
+    setUsuarioActual(null);
+    localStorage.removeItem(SESSION_KEY);
   }
 
   return (
-    <RolContext.Provider value={{
+    <AuthContext.Provider value={{
       usuarioActual,
-      setUsuarioById,
-      rol: usuarioActual.rol,
-      usuario: usuarioActual.nombre,
-      isAdmin: usuarioActual.rol === 'admin',
+      login,
+      logout,
+      isAdmin: usuarioActual?.rol === 'admin',
+      rol: usuarioActual?.rol ?? 'operador',
+      usuario: usuarioActual?.nombre ?? '',
     }}>
       {children}
-    </RolContext.Provider>
+    </AuthContext.Provider>
   );
 }
 
-export const useRol = () => useContext(RolContext);
+export const useRol = () => useContext(AuthContext);

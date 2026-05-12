@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Undo2, ShieldCheck, ChevronDown, Check } from 'lucide-react';
-import { useRol, USUARIOS } from '../../context/RolContext';
+import { Undo2, ShieldCheck, LogOut, ChevronDown } from 'lucide-react';
+import { useRol } from '../../context/RolContext';
 import { useUndoStack } from '../../hooks/useUndoable';
 import toast from 'react-hot-toast';
 import { useCotizacionesStore } from '../../store/cotizacionesStore';
@@ -15,11 +15,11 @@ const ROUTE_LABELS: Record<string, string> = {
 
 export function Topbar() {
   const { pathname } = useLocation();
-  const { usuarioActual, setUsuarioById, isAdmin } = useRol();
+  const { usuarioActual, logout, isAdmin } = useRol();
   const { canUndo, topLabel, undo } = useUndoStack();
   const pendientes = useCotizacionesStore(s => s.cotizaciones.filter(c => c.estado === 'pendiente').length);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const sectionLabel = ROUTE_LABELS[pathname] ?? 'Inicio';
 
@@ -28,32 +28,32 @@ export function Topbar() {
     if (label) toast.success(`Acción deshecha: ${label}`);
   }
 
-  // Cerrar dropdown al hacer click afuera
+  function handleLogout() {
+    setMenuOpen(false);
+    logout();
+    toast.success('Sesión cerrada');
+  }
+
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  function handleSelectUsuario(id: string) {
-    const u = USUARIOS.find(u => u.id === id);
-    setUsuarioById(id);
-    setDropdownOpen(false);
-    if (u) toast.success(`Sesión cambiada: ${u.nombre}`);
-  }
+  if (!usuarioActual) return null;
 
   return (
     <header className="h-14 bg-white border-b border-gray-200 flex items-center px-5 gap-4 flex-shrink-0 shadow-sm z-10">
-      {/* Section */}
+      {/* Sección activa */}
       <div className="flex-1 min-w-0">
         <h1 className="text-base font-semibold text-gray-800 truncate">{sectionLabel}</h1>
       </div>
 
-      {/* Pending badge */}
+      {/* Badge pendientes */}
       {pendientes > 0 && (
         <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1">
           <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
@@ -61,7 +61,7 @@ export function Topbar() {
         </div>
       )}
 
-      {/* Undo */}
+      {/* Deshacer */}
       <button
         onClick={handleUndo}
         disabled={!canUndo}
@@ -72,7 +72,7 @@ export function Topbar() {
         <span className="hidden sm:inline">Deshacer</span>
       </button>
 
-      {/* Admin badge */}
+      {/* Badge Admin */}
       {isAdmin && (
         <div className="flex items-center gap-1 bg-[#E1F5EE] border border-[#1D9E75]/30 rounded-lg px-2.5 py-1">
           <ShieldCheck size={13} className="text-[#1D9E75]" />
@@ -80,11 +80,11 @@ export function Topbar() {
         </div>
       )}
 
-      {/* Selector de usuario */}
-      <div className="relative" ref={dropRef}>
+      {/* Avatar + menú */}
+      <div className="relative" ref={menuRef}>
         <button
-          onClick={() => setDropdownOpen(v => !v)}
-          className="flex items-center gap-2 pl-2 border-l border-gray-200 hover:opacity-80 transition-opacity"
+          onClick={() => setMenuOpen(v => !v)}
+          className="flex items-center gap-2 pl-3 border-l border-gray-200 hover:opacity-80 transition-opacity"
         >
           <div className={`w-8 h-8 rounded-full ${usuarioActual.color} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
             {usuarioActual.iniciales}
@@ -93,38 +93,24 @@ export function Topbar() {
             <p className="text-sm font-medium text-gray-800 leading-tight">{usuarioActual.nombre}</p>
             <p className="text-[10px] text-gray-400 leading-tight">{usuarioActual.cargo}</p>
           </div>
-          <ChevronDown size={14} className={`text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={14} className={`text-gray-400 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
         </button>
 
-        {dropdownOpen && (
-          <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden">
-            <div className="px-3 py-2 border-b border-gray-100">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Cambiar usuario</p>
+        {menuOpen && (
+          <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl border border-gray-200 shadow-xl z-50 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <p className="text-sm font-semibold text-gray-800">{usuarioActual.nombre}</p>
+              <p className="text-xs text-gray-400">{usuarioActual.email}</p>
+              <p className="text-xs text-gray-400">{usuarioActual.cargo} — {usuarioActual.sector}</p>
             </div>
             <div className="py-1">
-              {USUARIOS.map(u => (
-                <button
-                  key={u.id}
-                  onClick={() => handleSelectUsuario(u.id)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
-                >
-                  <div className={`w-8 h-8 rounded-full ${u.color} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
-                    {u.iniciales}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{u.nombre}</p>
-                    <p className="text-[10px] text-gray-400 truncate">{u.cargo} — {u.sector}</p>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {u.rol === 'admin' && (
-                      <span className="text-[9px] bg-[#E1F5EE] text-[#0F6E56] px-1.5 py-0.5 rounded font-semibold">ADMIN</span>
-                    )}
-                    {usuarioActual.id === u.id && (
-                      <Check size={13} className="text-[#1D9E75]" />
-                    )}
-                  </div>
-                </button>
-              ))}
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut size={15} />
+                Cerrar sesión
+              </button>
             </div>
           </div>
         )}
