@@ -87,6 +87,10 @@ export const useStockStore = create<StockState>()(
       _snapshot: () => get().items,
       _restore: (snap) => set({ items: snap }),
     }),
-    { name: 'jugos-stock' }
+    {
+      name: 'jugos-stock',
+      version: 2,
+      migrate: () => ({ items: [], _initialized: false }),
+    }
   )
 );

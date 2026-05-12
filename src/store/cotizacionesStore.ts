@@ -137,6 +137,10 @@ export const useCotizacionesStore = create<CotizacionesState>()(
       _snapshot: () => get().cotizaciones,
       _restore: (snap) => set({ cotizaciones: snap }),
     }),
-    { name: 'jugos-cotizaciones' }
+    {
+      name: 'jugos-cotizaciones',
+      version: 2,
+      migrate: () => ({ cotizaciones: [], _initialized: false }),
+    }
   )
 );

@@ -72,6 +72,10 @@ export const useCuentasStore = create<CuentasState>()(
       _snapshot: () => get().cuentas,
       _restore: (snap) => set({ cuentas: snap }),
     }),
-    { name: 'jugos-cuentas' }
+    {
+      name: 'jugos-cuentas',
+      version: 2,
+      migrate: () => ({ cuentas: [], _initialized: false }),
+    }
   )
 );
