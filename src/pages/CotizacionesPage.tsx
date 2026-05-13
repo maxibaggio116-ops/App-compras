@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Plus, Search, Eye, Edit, Trash2, CheckCircle, XCircle, RotateCcw, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCotizacionesStore } from '../store/cotizacionesStore';
+import { useStockStore } from '../store/stockStore';
 import { useRol } from '../context/RolContext';
 import { pushUndo } from '../hooks/useUndoable';
 import type { Cotizacion } from '../types';
@@ -29,6 +30,7 @@ const ESTADO_TABS = [
 export default function CotizacionesPage() {
   const { usuario, isAdmin } = useRol();
   const { cotizaciones, add, update, remove, setEstado, _snapshot, _restore } = useCotizacionesStore();
+  const stockItems = useStockStore(s => s.items);
 
   const [tab, setTab] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -329,6 +331,7 @@ export default function CotizacionesPage() {
           defaultValues={{ cargadoPor: usuario }}
           onSubmit={handleAdd}
           onCancel={() => setModalNew(false)}
+          stockItems={stockItems}
         />
       </Modal>
 

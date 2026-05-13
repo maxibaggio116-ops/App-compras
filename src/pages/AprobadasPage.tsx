@@ -63,8 +63,9 @@ export default function AprobadasPage() {
       observaciones: factura.observaciones,
     });
 
-    // Actualizar stock si existe el artículo
+    // Actualizar o crear el artículo en stock
     const stockItem = stockStore.findByNombre(facturando.articulo);
+    let stockMsg = '';
     if (stockItem) {
       stockStore.ajustarStock(
         stockItem.id,
@@ -74,6 +75,28 @@ export default function AprobadasPage() {
         usuario,
         facturando.id
       );
+      stockMsg = 'Stock actualizado.';
+    } else {
+      const nuevoItem = stockStore.add({
+        tipo: facturando.tipo,
+        nombre: facturando.articulo,
+        unidad: facturando.unidad,
+        stockActual: facturando.cantidad,
+        stockMinimo: 0,
+        stockMaximo: 0,
+        precioReferencia: facturando.precioUnitario,
+        proveedor: facturando.proveedor,
+        observaciones: `Creado automáticamente al registrar factura ${factura.numero}`,
+      });
+      stockStore.ajustarStock(
+        nuevoItem.id,
+        facturando.cantidad,
+        `Compra inicial - Factura ${factura.numero}`,
+        'compra',
+        usuario,
+        facturando.id
+      );
+      stockMsg = 'Artículo agregado al stock.';
     }
 
     pushUndo({
@@ -86,7 +109,7 @@ export default function AprobadasPage() {
     });
 
     setFacturando(null);
-    toast.success(`Factura registrada. ${stockItem ? 'Stock actualizado.' : ''}`);
+    toast.success(`Factura registrada. ${stockMsg}`);
   }
 
   function handleRevertirFactura() {

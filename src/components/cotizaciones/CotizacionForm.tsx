@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { TipoInsumo, Moneda } from '../../types';
+import type { TipoInsumo, Moneda, StockItem } from '../../types';
 import { Button } from '../ui/Button';
 import { formatMonto } from '../../utils/formatters';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, PackageSearch, X } from 'lucide-react';
 
 const schema = z.object({
   tipo: z.enum(['insumo', 'material', 'servicio', 'maquinaria']),
@@ -32,6 +32,7 @@ interface Props {
   onSubmit: (data: CotizacionFormData) => void;
   onCancel: () => void;
   loading?: boolean;
+  stockItems?: StockItem[];
 }
 
 const SECTORES = ['Producción', 'Mantenimiento', 'Administración', 'Logística', 'Calidad'];
@@ -71,12 +72,15 @@ function Field({
 
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]/30 focus:border-[#1D9E75] bg-white';
 
-export function CotizacionForm({ defaultValues, onSubmit, onCancel, loading }: Props) {
+export function CotizacionForm({ defaultValues, onSubmit, onCancel, loading, stockItems = [] }: Props) {
   const [tcUSDUYU, setTcUSDUYU] = useState(TC_DEFAULT_USD_UYU);
   const [showTC, setShowTC] = useState(false);
+  const [stockVinculado, setStockVinculado] = useState<StockItem | null>(null);
+  const [stockSearch, setStockSearch] = useState('');
+  const [showStockDropdown, setShowStockDropdown] = useState(false);
 
   const {
-    register, handleSubmit, watch, formState: { errors },
+    register, handleSubmit, watch, setValue, formState: { errors },
   } = useForm<CotizacionFormData>({
     resolver: zodResolver(schema) as Resolver<CotizacionFormData>,
     defaultValues: {
@@ -105,8 +109,75 @@ export function CotizacionForm({ defaultValues, onSubmit, onCancel, loading }: P
   const precioConvertido = precio > 0 ? convertir(precio, moneda) : null;
   const totalConvertido = total > 0 ? convertir(total, moneda) : null;
 
+  const filteredStock = stockItems.filter(s =>
+    s.nombre.toLowerCase().includes(stockSearch.toLowerCase())
+  );
+
+  function seleccionarStock(item: StockItem) {
+    setStockVinculado(item);
+    setStockSearch('');
+    setShowStockDropdown(false);
+    setValue('articulo', item.nombre);
+    setValue('unidad', item.unidad);
+    setValue('tipo', item.tipo);
+  }
+
+  function limpiarStock() {
+    setStockVinculado(null);
+    setStockSearch('');
+    setValue('articulo', '');
+  }
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* Selector de insumo de stock */}
+      {stockItems.length > 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+          <p className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+            <PackageSearch size={13} />
+            Vincular a insumo de stock (opcional)
+          </p>
+          {stockVinculado ? (
+            <div className="flex items-center justify-between bg-[#E1F5EE] border border-[#1D9E75]/30 rounded-lg px-3 py-2">
+              <div>
+                <p className="text-sm font-medium text-[#0F6E56]">{stockVinculado.nombre}</p>
+                <p className="text-xs text-gray-500">Stock actual: <strong>{stockVinculado.stockActual} {stockVinculado.unidad}</strong></p>
+              </div>
+              <button type="button" onClick={limpiarStock} className="text-gray-400 hover:text-red-500 p-1">
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                type="text"
+                value={stockSearch}
+                onChange={e => { setStockSearch(e.target.value); setShowStockDropdown(true); }}
+                onFocus={() => setShowStockDropdown(true)}
+                onBlur={() => setTimeout(() => setShowStockDropdown(false), 150)}
+                placeholder="Buscar en stock existente..."
+                className={inputCls}
+              />
+              {showStockDropdown && filteredStock.length > 0 && (
+                <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredStock.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onMouseDown={() => seleccionarStock(item)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                    >
+                      <span className="font-medium text-gray-800">{item.nombre}</span>
+                      <span className="text-xs text-gray-400">{item.stockActual} {item.unidad}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <Field label="Tipo de insumo" error={errors.tipo?.message} required>
           <select {...register('tipo')} className={inputCls}>
