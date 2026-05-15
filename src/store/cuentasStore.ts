@@ -1,7 +1,12 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { db } from '../firebase';
+import {
+  collection, onSnapshot, doc, setDoc, deleteDoc,
+  writeBatch, getDocs, query, where,
+} from 'firebase/firestore';
 import type { CuentaCorriente } from '../types';
-import { seedCuentasCorrientes } from '../data/seedData';
+
+const COL = 'cuentas';
 
 interface CuentasState {
   cuentas: CuentaCorriente[];
@@ -17,65 +22,69 @@ interface CuentasState {
   _restore: (snap: CuentaCorriente[]) => void;
 }
 
-export const useCuentasStore = create<CuentasState>()(
-  persist(
-    (set, get) => ({
-      cuentas: [],
-      _initialized: false,
+export const useCuentasStore = create<CuentasState>()((set, get) => ({
+  cuentas: [],
+  _initialized: false,
 
-      init() {
-        if (!get()._initialized) {
-          set({ cuentas: seedCuentasCorrientes, _initialized: true });
-        }
-      },
+  init() {
+    if (get()._initialized) return;
+    set({ _initialized: true });
+    onSnapshot(collection(db, COL), (snap) => {
+      const cuentas = snap.docs
+        .map(d => d.data() as CuentaCorriente)
+        .sort((a, b) => b.fechaFactura.localeCompare(a.fechaFactura));
+      set({ cuentas });
+    });
+  },
 
-      add(data) {
-        const cc: CuentaCorriente = { ...data, id: `cc-${Date.now()}` };
-        set(s => ({ cuentas: [cc, ...s.cuentas] }));
-        return cc;
-      },
+  add(data) {
+    const cc: CuentaCorriente = { ...data, id: `cc-${Date.now()}` };
+    setDoc(doc(db, COL, cc.id), cc);
+    return cc;
+  },
 
-      update(id, changes) {
-        set(s => ({
-          cuentas: s.cuentas.map(c => (c.id === id ? { ...c, ...changes } : c)),
-        }));
-      },
+  update(id, changes) {
+    const c = get().cuentas.find(c => c.id === id);
+    if (!c) return;
+    setDoc(doc(db, COL, id), { ...c, ...changes });
+  },
 
-      remove(id) {
-        set(s => ({ cuentas: s.cuentas.filter(c => c.id !== id) }));
-      },
+  remove(id) {
+    deleteDoc(doc(db, COL, id));
+  },
 
-      removeByCotizacion(cotizacionId) {
-        set(s => ({ cuentas: s.cuentas.filter(c => c.cotizacionId !== cotizacionId) }));
-      },
+  removeByCotizacion(cotizacionId) {
+    get().cuentas
+      .filter(c => c.cotizacionId === cotizacionId)
+      .forEach(c => deleteDoc(doc(db, COL, c.id)));
+  },
 
-      marcarPagado(id, fechaPago, obs) {
-        set(s => ({
-          cuentas: s.cuentas.map(c =>
-            c.id === id
-              ? { ...c, estado: 'pagado' as const, pagadoEn: fechaPago, observaciones: obs || c.observaciones }
-              : c
-          ),
-        }));
-      },
+  marcarPagado(id, fechaPago, obs) {
+    const c = get().cuentas.find(c => c.id === id);
+    if (!c) return;
+    setDoc(doc(db, COL, id), {
+      ...c,
+      estado: 'pagado' as const,
+      pagadoEn: fechaPago,
+      observaciones: obs || c.observaciones,
+    });
+  },
 
-      revertirPago(id) {
-        set(s => ({
-          cuentas: s.cuentas.map(c =>
-            c.id === id
-              ? { ...c, estado: 'pendiente' as const, pagadoEn: undefined }
-              : c
-          ),
-        }));
-      },
+  revertirPago(id) {
+    const c = get().cuentas.find(c => c.id === id);
+    if (!c) return;
+    const { pagadoEn: _p, ...rest } = c;
+    setDoc(doc(db, COL, id), { ...rest, estado: 'pendiente' as const });
+  },
 
-      _snapshot: () => get().cuentas,
-      _restore: (snap) => set({ cuentas: snap }),
-    }),
-    {
-      name: 'jugos-cuentas',
-      version: 2,
-      migrate: () => ({ cuentas: [], _initialized: false }),
-    }
-  )
-);
+  _snapshot: () => get().cuentas,
+
+  _restore(snap) {
+    getDocs(collection(db, COL)).then(current => {
+      const batch = writeBatch(db);
+      current.docs.forEach(d => batch.delete(d.ref));
+      snap.forEach(c => batch.set(doc(db, COL, c.id), c));
+      batch.commit();
+    });
+  },
+}));
