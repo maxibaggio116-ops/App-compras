@@ -4,9 +4,15 @@ import {
   collection, onSnapshot, doc, setDoc, deleteDoc,
   writeBatch, getDocs,
 } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 import type { Cotizacion, Factura, EstadoCotizacion } from '../types';
 
 const COL = 'cotizaciones';
+
+function fbError(e: unknown) {
+  console.error('Firebase error:', e);
+  toast.error('Error al guardar. Verificá las reglas de Firestore.');
+}
 
 interface CotizacionesState {
   cotizaciones: Cotizacion[];
@@ -29,12 +35,19 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
   init() {
     if (get()._initialized) return;
     set({ _initialized: true });
-    onSnapshot(collection(db, COL), (snap) => {
-      const cotizaciones = snap.docs
-        .map(d => d.data() as Cotizacion)
-        .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn));
-      set({ cotizaciones });
-    });
+    onSnapshot(
+      collection(db, COL),
+      (snap) => {
+        const cotizaciones = snap.docs
+          .map(d => d.data() as Cotizacion)
+          .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn));
+        set({ cotizaciones });
+      },
+      (error) => {
+        console.error('Firestore read error:', error);
+        toast.error('No se puede leer Firestore. Publicá las reglas en Firebase Console.');
+      }
+    );
   },
 
   add(data) {
@@ -47,7 +60,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [{ fecha: now, accion: 'Creada', usuario: data.cargadoPor }],
     };
-    setDoc(doc(db, COL, c.id), c);
+    setDoc(doc(db, COL, c.id), c).catch(fbError);
     return c;
   },
 
@@ -60,11 +73,11 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [...c.historial, { fecha: now, accion: 'Modificada', usuario }],
     };
-    setDoc(doc(db, COL, id), updated);
+    setDoc(doc(db, COL, id), updated).catch(fbError);
   },
 
   remove(id) {
-    deleteDoc(doc(db, COL, id));
+    deleteDoc(doc(db, COL, id)).catch(fbError);
   },
 
   setEstado(id, estado, usuario, detalle) {
@@ -84,7 +97,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [...c.historial, { fecha: now, accion: accionMap[estado], usuario, detalle }],
     };
-    setDoc(doc(db, COL, id), updated);
+    setDoc(doc(db, COL, id), updated).catch(fbError);
   },
 
   registrarFactura(id, factura, usuario) {
@@ -98,7 +111,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [...c.historial, { fecha: now, accion: 'Facturada', usuario, detalle: `Factura ${factura.numero}` }],
     };
-    setDoc(doc(db, COL, id), updated);
+    setDoc(doc(db, COL, id), updated).catch(fbError);
   },
 
   revertirFactura(id, usuario) {
@@ -112,7 +125,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [...c.historial, { fecha: now, accion: 'Facturación revertida', usuario }],
     };
-    setDoc(doc(db, COL, id), updated);
+    setDoc(doc(db, COL, id), updated).catch(fbError);
   },
 
   _snapshot: () => get().cotizaciones,
@@ -122,7 +135,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       const batch = writeBatch(db);
       current.docs.forEach(d => batch.delete(d.ref));
       snap.forEach(c => batch.set(doc(db, COL, c.id), c));
-      batch.commit();
-    });
+      batch.commit().catch(fbError);
+    }).catch(fbError);
   },
 }));
