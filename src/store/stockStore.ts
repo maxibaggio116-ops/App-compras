@@ -4,9 +4,19 @@ import {
   collection, onSnapshot, doc, setDoc, deleteDoc,
   writeBatch, getDocs,
 } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 import type { StockItem, MovimientoStock } from '../types';
 
 const COL = 'stock';
+
+function fbError(e: unknown) {
+  console.error('Firebase error:', e);
+  toast.error('Error al guardar: ' + (e instanceof Error ? e.message : String(e)));
+}
+
+function clean<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
+}
 
 interface StockState {
   items: StockItem[];
@@ -44,7 +54,7 @@ export const useStockStore = create<StockState>()((set, get) => ({
       actualizadoEn: now,
       historialMovimientos: [],
     };
-    setDoc(doc(db, COL, item.id), item);
+    setDoc(doc(db, COL, item.id), clean(item)).catch(fbError);
     return item;
   },
 
@@ -52,7 +62,7 @@ export const useStockStore = create<StockState>()((set, get) => ({
     const now = new Date().toISOString();
     const item = get().items.find(i => i.id === id);
     if (!item) return;
-    setDoc(doc(db, COL, id), { ...item, ...changes, actualizadoEn: now });
+    setDoc(doc(db, COL, id), clean({ ...item, ...changes, actualizadoEn: now })).catch(fbError);
   },
 
   remove(id) {
@@ -74,12 +84,12 @@ export const useStockStore = create<StockState>()((set, get) => ({
       usuario,
       cotizacionId,
     };
-    setDoc(doc(db, COL, id), {
+    setDoc(doc(db, COL, id), clean({
       ...item,
       stockActual: stockNuevo,
       actualizadoEn: now,
       historialMovimientos: [...item.historialMovimientos, mov],
-    });
+    })).catch(fbError);
   },
 
   findByNombre(nombre) {

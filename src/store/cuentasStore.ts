@@ -4,9 +4,19 @@ import {
   collection, onSnapshot, doc, setDoc, deleteDoc,
   writeBatch, getDocs, query, where,
 } from 'firebase/firestore';
+import toast from 'react-hot-toast';
 import type { CuentaCorriente } from '../types';
 
 const COL = 'cuentas';
+
+function fbError(e: unknown) {
+  console.error('Firebase error:', e);
+  toast.error('Error al guardar: ' + (e instanceof Error ? e.message : String(e)));
+}
+
+function clean<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
+}
 
 interface CuentasState {
   cuentas: CuentaCorriente[];
@@ -39,14 +49,14 @@ export const useCuentasStore = create<CuentasState>()((set, get) => ({
 
   add(data) {
     const cc: CuentaCorriente = { ...data, id: `cc-${Date.now()}` };
-    setDoc(doc(db, COL, cc.id), cc);
+    setDoc(doc(db, COL, cc.id), clean(cc)).catch(fbError);
     return cc;
   },
 
   update(id, changes) {
     const c = get().cuentas.find(c => c.id === id);
     if (!c) return;
-    setDoc(doc(db, COL, id), { ...c, ...changes });
+    setDoc(doc(db, COL, id), clean({ ...c, ...changes })).catch(fbError);
   },
 
   remove(id) {
@@ -62,19 +72,19 @@ export const useCuentasStore = create<CuentasState>()((set, get) => ({
   marcarPagado(id, fechaPago, obs) {
     const c = get().cuentas.find(c => c.id === id);
     if (!c) return;
-    setDoc(doc(db, COL, id), {
+    setDoc(doc(db, COL, id), clean({
       ...c,
       estado: 'pagado' as const,
       pagadoEn: fechaPago,
       observaciones: obs || c.observaciones,
-    });
+    })).catch(fbError);
   },
 
   revertirPago(id) {
     const c = get().cuentas.find(c => c.id === id);
     if (!c) return;
     const { pagadoEn: _p, ...rest } = c;
-    setDoc(doc(db, COL, id), { ...rest, estado: 'pendiente' as const });
+    setDoc(doc(db, COL, id), clean({ ...rest, estado: 'pendiente' as const })).catch(fbError);
   },
 
   _snapshot: () => get().cuentas,

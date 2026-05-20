@@ -11,7 +11,12 @@ const COL = 'cotizaciones';
 
 function fbError(e: unknown) {
   console.error('Firebase error:', e);
-  toast.error('Error al guardar. Verificá las reglas de Firestore.');
+  toast.error('Error al guardar: ' + (e instanceof Error ? e.message : String(e)));
+}
+
+// Firestore no acepta valores undefined — los elimina antes de escribir
+function clean<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
 }
 
 interface CotizacionesState {
@@ -60,7 +65,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [{ fecha: now, accion: 'Creada', usuario: data.cargadoPor }],
     };
-    setDoc(doc(db, COL, c.id), c).catch(fbError);
+    setDoc(doc(db, COL, c.id), clean(c)).catch(fbError);
     return c;
   },
 
@@ -73,7 +78,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [...c.historial, { fecha: now, accion: 'Modificada', usuario }],
     };
-    setDoc(doc(db, COL, id), updated).catch(fbError);
+    setDoc(doc(db, COL, id), clean(updated)).catch(fbError);
   },
 
   remove(id) {
@@ -97,7 +102,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [...c.historial, { fecha: now, accion: accionMap[estado], usuario, detalle }],
     };
-    setDoc(doc(db, COL, id), updated).catch(fbError);
+    setDoc(doc(db, COL, id), clean(updated)).catch(fbError);
   },
 
   registrarFactura(id, factura, usuario) {
@@ -111,7 +116,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [...c.historial, { fecha: now, accion: 'Facturada', usuario, detalle: `Factura ${factura.numero}` }],
     };
-    setDoc(doc(db, COL, id), updated).catch(fbError);
+    setDoc(doc(db, COL, id), clean(updated)).catch(fbError);
   },
 
   revertirFactura(id, usuario) {
@@ -125,7 +130,7 @@ export const useCotizacionesStore = create<CotizacionesState>()((set, get) => ({
       actualizadoEn: now,
       historial: [...c.historial, { fecha: now, accion: 'Facturación revertida', usuario }],
     };
-    setDoc(doc(db, COL, id), updated).catch(fbError);
+    setDoc(doc(db, COL, id), clean(updated)).catch(fbError);
   },
 
   _snapshot: () => get().cotizaciones,
